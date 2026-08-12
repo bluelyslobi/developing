@@ -1,0 +1,762 @@
+===================================================
+  트래블시커 앱 개발 과정 정리
+  (최종 업데이트: 2026년 7월 28일)
+===================================================
+
+
+■ 앱 기본 정보
+  - 앱 이름: 트래블시커 (TravelSeeker) — 2026-07-13 "트래블쉐어"에서 개명 확정·적용 완료
+  - 위치: C:\Users\User.DESKTOP-BLBKBC2\TravelApp
+  - 기술: React Native 0.85.3 + Expo SDK 56 (~56.0.12), React 19.2.3
+  - 형태: 모바일 앱 (Android / iOS 지원)
+  - Firebase 프로젝트: travelshare-b6659 (내부 식별자, 생성 후 변경 불가라 의도적으로 유지 — 사용자 노출 없음)
+  - 번들 ID: com.travelshare.app (EAS 정식 등록 시점에 정리 예정, 아직 미실행)
+  - EAS 프로젝트: travelshare-b6659
+
+  ※ 아래 본문 중 "트래블쉐어"로 표기된 부분은 개명 이전 시점의 과거 기록이므로
+    그대로 보존함 (당시 상황을 정확히 남기기 위함). 최신 현황은 본 파일 하단
+    "이름 최종 확정 및 개명 적용 (2026-07-13)" 섹션 참고.
+
+
+===================================================
+  초기 개발 1~6단계: 기본 구조 + Firebase 연동
+  (2026-06-16 ~ 2026-06-21)
+===================================================
+
+---------------------------------------------------
+  1단계: 기본 앱 구조 완성
+---------------------------------------------------
+
+  5개 탭 네비게이션 기반 여행 커뮤니티 앱 MVP 완성
+
+  탭 구성:
+  ┌─────────────────────────────────────────┐
+  │  홈 | 커뮤니티 | 중고거래 | 패키지 | 마이  │
+  └─────────────────────────────────────────┘
+
+  각 화면 역할:
+  - 홈(HomeScreen)      : 인기 여행지, 최신 여행 팁, 패키지 배너
+  - 커뮤니티(Community) : 여행 팁 게시판, 좋아요, 글쓰기
+  - 중고거래(Market)    : 여행 용품 중고 거래
+  - 패키지(Package)     : 여행 패키지 상품 목록
+  - 마이(Profile)       : 내 프로필, 활동 내역
+
+
+---------------------------------------------------
+  2단계: 환전정보 기능 추가
+---------------------------------------------------
+
+  - 커뮤니티 탭 안에 환전정보 카테고리 추가 (별도 탭 X)
+  - 필터 칩: 전체 | 환전정보 | 일본 | 태국 | 유럽 | 동남아 | 미주
+  - 홈 화면 환율 미니 배너 → 클릭 시 커뮤니티 환전정보로 이동
+
+
+---------------------------------------------------
+  3단계: 실시간 환율 API 연동 (2026-06-20)
+---------------------------------------------------
+
+  API: Frankfurter API (api.frankfurter.app) — 무료, API키 불필요
+  - 지원 통화: JPY / USD / EUR / THB → KRW
+  - 전일 대비 등락률(▲▼) 자동 계산
+  - 로딩 스피너 + 에러 처리
+
+  적용 위치:
+  - CommunityScreen → 환전정보 탭 실시간 환율 카드
+  - HomeScreen → 환율 미니 배너 실시간 전환
+
+
+---------------------------------------------------
+  4단계: UI 버그 수정 (2026-06-21)
+---------------------------------------------------
+
+  [칩 바 레이아웃 Android 버그 수정]
+  - 원인: 가로 ScrollView에 paddingVertical 직접 적용 시
+          탭에 따라 높이가 달라지고 콘텐츠 영역 겹침
+  - 해결: ScrollView를 View로 감싸고 View에 paddingVertical 적용
+  - 적용: CommunityScreen, MarketScreen, 글쓰기/등록 모달 칩 전체
+
+
+---------------------------------------------------
+  5단계: Firebase 연동 — 인증 (2026-06-21)
+---------------------------------------------------
+
+  설치 패키지:
+  - firebase@12.15.0
+  - @react-native-async-storage/async-storage
+
+  Firebase 설정:
+  - 프로젝트 ID : travelshare-b6659
+  - Authentication: 이메일/비밀번호 활성화
+  - Firestore    : asia-northeast3 (서울), 테스트 모드
+  - Storage      : asia-northeast3 (서울), 테스트 모드
+
+  구현 파일:
+  [services/firebase.js]    Firebase 초기화, auth/db/storage export
+  [services/uploadImage.js] 갤러리 선택 → Storage 업로드 → URL 반환
+  [context/AuthContext.js]  전역 인증 상태, signUp/login/logout
+  [App.js]                  AuthProvider로 전체 앱 감싸기
+
+  [ProfileScreen.js]
+  - 비로그인: 이메일/비밀번호 로그인 + 회원가입 화면
+  - 로그인:   Firebase 사용자 정보 기반 마이페이지
+  - 회원가입 시 Firestore users 컬렉션에 프로필 자동 저장
+
+  ✅ 회원가입 / 로그인 / 로그아웃 테스트 완료
+
+
+---------------------------------------------------
+  6단계: Firebase 연동 — Firestore + Storage (2026-06-21)
+---------------------------------------------------
+
+  설치 패키지:
+  - expo-image-picker (갤러리 접근)
+
+  [screens/CommunityScreen.js] — Firestore 연동
+  - 하드코딩 posts 배열 → Firestore `posts` 컬렉션 실시간 리스너
+  - 글쓰기 모달: 목적지 선택 + 제목/내용/사진 → Firestore 저장
+  - 사진 추가: 갤러리 선택 → Firebase Storage 업로드 → URL 저장
+  - 좋아요: Firestore likes 필드 increment/decrement 실시간 반영
+  - 비로그인 글쓰기 차단 (Alert 안내)
+  - 빈 상태 화면 처리
+
+  [screens/MarketScreen.js] — Firestore + Storage + 채팅 연동
+  - 하드코딩 items 배열 → Firestore `products` 컬렉션 실시간 리스너
+  - 판매하기 모달: 카테고리/상품명/가격/상태/지역/설명/사진 → Firestore 저장
+  - 사진: 갤러리 선택 → Storage 업로드 → URL 저장
+  - 비로그인 / 자기 상품 채팅 차단
+
+  [screens/ChatScreen.js] — 실시간 채팅 (신규)
+  - 채팅방 ID: 참여자 UID 정렬 + 상품 ID 조합
+  - Firestore `chats/{chatId}/messages` 실시간 리스너
+  - 메시지 전송 시 채팅방 메타 정보(lastMessage 등) 동시 저장
+  - 내 메시지(오른쪽 teal) / 상대 메시지(왼쪽 흰색) 말풍선 UI
+
+  [screens/PackageScreen.js] — Firestore + Storage 연동
+  - 하드코딩 packages 배열 → Firestore `packages` 컬렉션 실시간 리스너
+  - 등록 모달: 패키지명/여행지/기간/가격/태그/포함내역/일정/사진 → Firestore 저장
+  - 할인율 자동 계산 (정가 대비 할인가)
+  - 포함내역·일정: 줄바꿈으로 항목 구분 입력
+
+  [screens/HomeScreen.js] — Firestore 연동
+  - 최신 여행 팁 3개: Firestore `posts` 실시간
+  - 인기 여행지: posts 목적지별 글 수 집계 → 상위 3개 자동 노출
+    (환전정보 제외, 글 없으면 기본 카드 표시)
+
+  ✅ 전체 Firestore + Storage 연동 테스트 완료
+
+
+===================================================
+  기능 개선 1단계: 구멍 메우기 (2026-06-23)
+===================================================
+
+  ✅ 전부 테스트 완료
+
+  1) 좋아요 중복 방지
+  ----------------------------------------
+  - 기존: 새로고침하면 좋아요 초기화, 중복 클릭 가능
+  - 개선: Firestore posts에 `likedBy` 배열 필드 추가
+    · 좋아요 시: arrayUnion(user.uid) + increment(1)
+    · 취소 시:  arrayRemove(user.uid) + increment(-1)
+  - 결과: 중복 불가, 앱 재시작해도 상태 유지
+  - 수정 파일: CommunityScreen.js
+
+  2) 내 글 / 내 상품 / 내 패키지 삭제
+  ----------------------------------------
+  - 게시글: 본인 글에만 휴지통 아이콘 표시 → 삭제 확인 Alert
+  - 중고거래: 상품 상세에서 본인 상품에 "삭제하기" 버튼
+  - 패키지: 패키지 상세에서 본인 패키지에 "삭제하기" 버튼
+  - 삭제 시 postCount 자동 감소 (커뮤니티 글 기준)
+  - 수정 파일: CommunityScreen.js, MarketScreen.js, PackageScreen.js
+
+  3) 판매완료 처리
+  ----------------------------------------
+  - 내 상품 상세 모달에 "판매완료 처리" 버튼 추가
+  - 클릭 시 Firestore products.status → '판매완료'
+  - 상품 카드에 "판매완료" 반투명 오버레이 뱃지 표시
+  - 판매완료 상품: 구매하기/채팅하기 버튼 비활성화
+  - 수정 파일: MarketScreen.js
+
+  4) postCount 자동 관리
+  ----------------------------------------
+  - 글 작성 시: users/{uid}.postCount increment(+1)
+  - 글 삭제 시: users/{uid}.postCount increment(-1)
+  - 수정 파일: CommunityScreen.js
+
+
+===================================================
+  기능 개선 2단계: 마이 메뉴 살리기 (2026-06-23)
+===================================================
+
+  ✅ 전부 테스트 완료
+
+  구현 방식: ProfileScreen.js 내 단일 Modal 컴포넌트
+  (별도 화면 파일 없음 — 슬라이드 모달 방식)
+
+  1) 판매 내역
+  ----------------------------------------
+  - Firestore `products` where uid == user.uid 조회
+  - 상품명 + 가격 + 판매중/판매완료 상태 뱃지 표시
+  - 클라이언트 정렬 (createdAt 내림차순, Firestore 인덱스 불필요)
+  - 테스트: 상품 '판매완료' 뱃지와 함께 정상 표시 ✅
+
+  2) 구매 내역
+  ----------------------------------------
+  - Firestore `chats` where participants array-contains user.uid 조회
+  - 구매자(participants[0] === user.uid) 필터로 본인 문의 건만 표시
+  - 상품명 + 마지막 메시지 표시
+  - 테스트: 빈 상태 메시지 정상 표시 ✅
+
+  3) 찜한 팁
+  ----------------------------------------
+  - Firestore `posts` where likedBy array-contains user.uid 조회
+  - 목적지(teal) + 제목 + 내용 미리보기 + ♥ 좋아요 수 표시
+  - 테스트: 좋아요 누른 게시글 즉시 반영 ✅
+
+  4) 프로필 수정 (닉네임 변경)
+  ----------------------------------------
+  - 현재 닉네임이 TextInput에 자동 채워짐
+  - 저장 시 Firestore users/{uid}.nickname 업데이트
+  - 저장 후 AuthContext setUserProfile 호출 → 화면 즉시 반영
+    (재로그인 없이 프로필 상단 이름 즉시 변경)
+  - 수정 파일: context/AuthContext.js (setUserProfile 노출),
+               screens/ProfileScreen.js
+
+
+===================================================
+  기능 개선 3단계: 소통 기능 (2026-06-23)
+===================================================
+
+  ✅ 전부 테스트 완료 (에뮬레이터 Pixel_8 AVD)
+
+  1) 댓글 기능 (CommunityScreen)
+  ----------------------------------------
+  - 게시글 카드 하단 댓글 버튼 탭 → 댓글 모달 오픈
+  - Firestore `posts/{id}/comments` 서브컬렉션
+  - 댓글 작성: 로그인 필요, 텍스트 입력 후 전송
+  - 댓글 삭제: 본인 댓글에만 삭제 버튼 표시
+  - 댓글 수 동기화: 작성 +1 / 삭제 -1 (posts.comments 필드)
+  - 로그인 안된 상태에서 댓글 버튼 탭 → 로그인 안내 Alert
+  - 테스트: 댓글 작성/표시/삭제 모두 정상 ✅
+
+  2) 패키지 리뷰 + 별점 (PackageScreen)
+  ----------------------------------------
+  - Firestore `packages/{id}/reviews` 서브컬렉션
+  - 리뷰 스키마: uid, author, rating(1-5), text, createdAt
+  - 별점 1~5 탭 인터페이스 (★ 컬러 토글)
+  - 중복 리뷰 방지: getDocs 사전 체크
+  - 리뷰 등록 시 packages.rating/reviews 자동 평균 계산 업데이트
+  - 패키지 카드에 "★ 평점 (N개 리뷰)" 표시
+  - 테스트: 리뷰 작성, 별점 반영, 중복 방지 모두 정상 ✅
+
+  3) 패키지 예약하기 (PackageScreen + ProfileScreen)
+  ----------------------------------------
+  - Firestore `reservations` 컬렉션
+  - 예약 스키마: uid, userNickname, packageId, packageTitle,
+                packageImage, price, destination, duration,
+                status('예약중'), createdAt
+  - 패키지 상세 하단 "예약하기" 버튼 → 확인 Alert → Firestore 저장
+  - 예약 후 버튼 "예약완료 ✓" 으로 변경 (중복 예약 방지)
+  - 마이 > 예약한 패키지: reservations where uid==me 조회
+    · 패키지명 + 가격 + 여행지 + 일정 표시
+  - 테스트: 예약하기 → 버튼 변경 → 마이에서 확인 모두 정상 ✅
+
+
+===================================================
+  기능 개선 4단계: 완성도 (2026-06-24)
+===================================================
+
+  ✅ 전부 테스트 완료 (에뮬레이터 Pixel_8 AVD)
+
+  1) 검색 기능 (HomeScreen)
+  ----------------------------------------
+  - 검색 위치: 홈 화면 상단 검색창
+  - 검색 대상: posts(여행 팁) + packages(패키지) 동시 검색
+  - 방식: 클라이언트 사이드 실시간 필터링 (Firestore 인덱스 불필요)
+    · posts: title/destination/content 포함 여부
+    · packages: title/destination 포함 여부
+  - 결과 드롭다운 UI:
+    · 게시글 최대 4개 → 탭 시 Community 탭으로 이동
+    · 패키지 최대 4개 → 탭 시 Package 탭으로 이동
+    · 검색어 없으면 드롭다운 닫힘
+  - 수정 파일: HomeScreen.js
+  - 테스트: "Osaka" 검색 → 게시글 결과 표시 ✅
+            "도쿄" 검색 → 패키지 결과 표시 ✅
+
+  2) 푸시 알림 (App.js)
+  ----------------------------------------
+  - 패키지: expo-notifications ~56.0.18
+  - Expo Go SDK 53+ 이슈 해결:
+    · Expo Go에서 원격 푸시 알림 지원 완전 제거됨 (SDK 53+)
+    · static import 시 모듈 초기화 단계에서 crash 발생
+    · 해결: static import 완전 제거 → dynamic require() 조건부 로드
+    · isExpoGo = Constants.appOwnership === 'expo' 체크
+    · Expo Go 환경에서 expo-notifications 모듈 자체를 로드 안 함
+  - 구현:
+    · 앱 시작 시 알림 권한 요청 (EAS 빌드에서만)
+    · Expo Push Token 획득 및 콘솔 출력
+    · 포그라운드 알림 핸들러 설정 (showAlert/playSound/setBadge)
+  - Expo Go: 완전 skip (crash 없음) ✅
+  - EAS 빌드: 권한 요청 + 토큰 획득 동작 ✅
+  - 수정 파일: App.js
+
+  3) 신고 기능 (Community / Market / Package)
+  ----------------------------------------
+  - Firestore `reports` 컬렉션
+  - 신고 스키마: uid, targetId, targetType, reason, createdAt
+    · targetType: 'post' | 'product' | 'package'
+  - 중복 신고 방지: getDocs로 사전 체크 후 addDoc
+  - 노출 조건: 로그인 상태 + 타인 콘텐츠에만 🚩 아이콘 표시
+  - CommunityScreen: 게시글 카드 헤더 오른쪽 🚩 아이콘
+    · "이 게시글을 신고하시겠습니까?" Alert
+    · 이미 신고: "이미 신고한 게시글입니다." 차단
+  - MarketScreen: 상품 상세 하단 액션바 왼쪽 🚩 아이콘
+    · "이 상품을 신고하시겠습니까?" Alert
+  - PackageScreen: 패키지 상세 하단 액션바 왼쪽 🚩 아이콘
+    · "이 패키지를 신고하시겠습니까?" Alert
+  - 신고 완료: "신고가 접수되었습니다. 검토 후 처리됩니다." Alert
+  - 테스트: 3개 화면 신고 버튼 표시 ✅
+            신고 Alert 및 Firestore 저장 ✅
+            중복 신고 차단 ✅
+            본인 글에 신고 버튼 미노출 ✅
+
+  4) EAS Build 설정
+  ----------------------------------------
+  - eas-cli 설치: npm install -g eas-cli
+  - 로그인: eas login (계정: bluelyslobi@gmail.com)
+  - app.json 설정:
+    · name: "트래블쉐어"
+    · slug: "travelshare"
+    · bundleIdentifier: "com.travelshare.app" (iOS)
+    · package: "com.travelshare.app" (Android)
+    · projectId: "travelshare-b6659"
+  - eas.json 프로파일:
+    · development: 개발 빌드 (developmentClient: true)
+    · preview: APK 빌드 (테스트 배포용)
+    · production: AAB 빌드 (스토어 배포용)
+  - 빌드 명령:
+    · APK(테스트): eas build --platform android --profile preview
+    · 스토어(AAB): eas build --platform android --profile production
+
+
+===================================================
+  앱 실행 방법
+===================================================
+
+  1. 에뮬레이터 실행:
+     & "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -avd Pixel_8
+
+  2. 앱 실행:
+     cd C:\Users\User.DESKTOP-BLBKBC2\TravelApp
+     $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+     npx expo start --android --port 8081
+
+  3. ADB 포트 포워딩 (에뮬레이터 연결 확인):
+     $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+     & $adb reverse tcp:8081 tcp:8081
+
+  포트 충돌 시:
+     Get-NetTCPConnection -LocalPort 8081 | Stop-Process -Force
+
+  Expo Go 접속 시:
+     exp://10.0.2.2:8081 (에뮬레이터 → 호스트 Metro)
+
+  EAS Build:
+     eas build --platform android --profile preview   ← APK
+     eas build --platform android --profile production ← AAB(스토어)
+
+
+===================================================
+  배포 준비 단계: Firebase 보안 규칙 (2026-06-24)
+===================================================
+
+  배경: 개발 중 Firestore/Storage가 테스트 모드(완전 개방) 상태였음
+        실 사용자 생기기 전에 프로덕션 보안 규칙으로 전환 필요
+
+  생성 파일:
+  - firestore.rules   ← Firestore 보안 규칙
+  - storage.rules     ← Storage 보안 규칙
+  - firebase.json     ← Firebase CLI 배포 설정
+
+  [Firestore 규칙 핵심]
+  - users     : 로그인 필수 읽기, 본인만 생성/수정, 삭제 불가
+  - posts     : 읽기 누구나, 작성 로그인 필요, 수정·삭제 본인만
+                좋아요(likes/likedBy)/댓글수(comments) 카운트는 타인도 업데이트 허용
+  - comments  : 읽기 누구나, 작성 로그인 필요, 삭제 본인만
+  - products  : 읽기 누구나, 작성 로그인 필요, 수정·삭제 본인만
+  - packages  : 읽기 누구나, 작성 로그인 필요, 수정·삭제 본인만
+                리뷰 등록 시 rating/reviews 카운트 타인 업데이트 허용
+  - reviews   : 읽기 누구나, 작성 로그인 필요, 삭제 본인만
+  - chats     : participants 배열에 포함된 사람만 읽기/쓰기
+  - messages  : 채팅방 participants만 읽기/작성, 수정·삭제 불가
+  - reservations : 본인 예약만 읽기/생성, 수정·삭제 불가
+  - reports   : 본인 신고만 읽기/생성, 수정·삭제 불가
+
+  [Storage 규칙 핵심]
+  - posts/products/packages 이미지: 읽기 누구나
+  - 업로드: 로그인 필수 + 5MB 이하 + 이미지 파일만 허용
+
+  [Firebase 규칙 배포 명령]
+  npm install -g firebase-tools
+  firebase login
+  firebase use travelshare-b6659
+  firebase deploy --only firestore:rules,storage
+
+  ※ 위 명령 실행 전까지 규칙은 로컬 파일 상태 (Firebase에 미반영)
+
+
+===================================================
+  배포 전 코드 점검 (2026-06-25)
+===================================================
+
+  목적: 배포 시작 전 전체 코드 및 설정 이상 유무 확인
+
+  점검 결과: 심각한 오류 없음 ✅
+
+  확인 항목:
+  - package.json, app.json, eas.json        → 정상
+  - services/firebase.js (초기화)           → 정상
+  - context/AuthContext.js                  → 정상
+  - screens/ 전체 6개 파일                  → 정상
+  - firestore.rules, storage.rules          → 정상 (잘 설계됨)
+  - babel.config.js, metro.config.js        → 미존재 (Expo 기본값 사용, 정상)
+  - .env                                    → 미존재 (클라이언트 앱 표준, 정상)
+
+  주의사항:
+  - google-services-key.json 미존재
+    → eas.json의 serviceAccountKeyPath에서 참조 중
+    → Google Play Console 배포 마지막 단계에서 생성 필요 (지금은 불필요)
+  - Firebase 보안 규칙 미배포 상태 유지
+    → 로컬 파일(firestore.rules, storage.rules)은 완성
+    → firebase deploy 명령 실행 전까지 미반영
+
+
+===================================================
+  앱 컨셉 방향 전환 (2026-07-03)
+===================================================
+
+  결정 배경: 커뮤니티/중고거래/패키지 기능은 완성됐으나 차별점 부재 판단
+             → 핵심 차별화 기능을 추가하기로 결정
+
+  [핵심 차별점 확정]
+  - 외화 직거래 매칭 기능: 수수료 없이 유저끼리 직접 환전 (은행보다 저렴)
+  - 성장 순서: 커뮤니티 먼저 키우기 → 중고거래 → 패키지 → 광고 수익로 자연 확장
+  - 외화 직거래 기능을 실제 구현한 뒤 배포하기로 결정 (배포 순서 변경)
+
+  [수익 로드맵]
+  1단계 — 유저 모으기 (무료): 커뮤니티 + 외화 직거래 매칭
+  2단계 — 수수료 수익: 중고거래 수수료 + 패키지 중개 수수료
+  3단계 — 광고 수익: 여행사/환전소/여행용품 브랜드 배너 광고
+
+  [마케팅 전략 (제로 예산, 상세는 Desktop\트래블시커_마케팅계획.txt)]
+  - 순서: 지인(10~20명) → 기존 여행 커뮤니티 침투(카페/에타/블라인드/오픈채팅, 50명)
+          → 콘텐츠 유입(네이버 블로그 bestbik 누적 방문자 36만 활용, 100명+)
+  - 블로그 실행: 1주차 재활성화 → 2주차 "코딩 몰랐던 내가 여행 앱 만든 이야기"
+    → 3주차~ 환전 특화 시리즈로 외화 직거래 기능 자연스럽게 연결
+
+  상태: 외화 직거래 매칭 기능 미구현 — 다음 개발 단계의 최우선 과제
+
+
+===================================================
+  앱 이름 변경 검토 (2026-07-06)
+===================================================
+
+  사유: "트래블쉐어" 영문명(TravelShare)이 이미 해외에서 사용 중
+        → 앱스토어/구글플레이 앱, 웹서비스, 상표 충돌 우려
+
+  [기존 이름 "트래블쉐어(TravelShare)" 조사 결과]
+  - 한국어 "트래블쉐어" 자체: 앱스토어/구글플레이 정확히 일치하는 앱 없음
+  - 영문 "TravelShare": 이미 다수 사용 중
+    · iOS/Android 앱 "Travel Share" (Mike Borozdin 개발, 친구 여행 추천 공유 앱)
+      https://apps.apple.com/us/app/travel-share/id6450372990
+      https://play.google.com/store/apps/details?id=com.mikeborozdin.travelshare
+    · 웹서비스 travelshare.online (여행 일정 공유 플랫폼)
+    · Facebook mytravelshare 페이지
+    · Wyndham "WorldMark TravelShare" 멤버십 프로그램
+  - 한국 특허청(KIPRIS) 상표 등록 여부는 웹 검색만으론 확정 불가
+    → 실제 출원 전 https://www.kipris.or.kr 에서 직접 확인 필요
+
+  [새 이름 후보 (2026-07-06 제안)]
+  1. 트래블두레 (TravelDure)
+     - '두레': 한국 전통 품앗이/상부상조 공동체 뜻하는 순우리말
+     - 여행자 간 서로 돕고 나누는 커뮤니티 컨셉과 부합, 흔치 않아 충돌 가능성 낮음
+  2. 여행벗 (Yeohaengbeot)
+     - '벗': 친구의 옛말. 동행/커뮤니티 느낌, 순우리말이라 정겨움
+  3. 트래블마당 (TravelMadang)
+     - '마당': 사람들이 모이는 공터·광장. 커뮤니티+중고거래+패키지가 모이는 "장터" 느낌
+  4. 트립모아 (TripMoa)
+     - "모으다"에서 착안, 여행 정보/동행/거래를 한곳에 모은다는 의미
+  5. 어디가 (Eodiga)
+     - "어디 가?" 일상 인사말 그대로 사용, 짧고 캐주얼 (다만 흔한 표현이라 검색 노출 경쟁 있을 수 있음)
+  6. 트래블어울림 (Travel Eoullim)
+     - '어울림': 함께 어우러진다는 뜻, 커뮤니티성 강조
+
+  상태: 후보 중 선택 대기 — 확정되면 앱스토어/구글플레이/도메인/상표
+        사용 가능 여부 재확인 필요
+
+
+===================================================
+  이름 최종 확정 및 개명 적용 (2026-07-13)
+===================================================
+
+  [추가 후보 검토]
+  - 트래블시커/트레블시커 (TravelSeeker): 정확히 일치하는 앱/서비스 없음, 국내
+    사용 가능성 높음. 영문 "Travel Seeker"는 Amadeus의 구형 iPad 앱(2012년,
+    사실상 단종), travelseeker.shop 쇼핑몰 등 산발적 사용 이력만 있어 충돌
+    위험 낮음 (완전히 클린하진 않음)
+  - 트래블야드 (TravelYard): 스코틀랜드에서 현재 운영 중인 실제 여행사
+    (travelyard.net)와 이름이 정확히 겹쳐 리스크 있다고 판단 → 후보 제외
+
+  [최종 결정]
+  "트래블시커 / TravelSeeker"로 확정
+  사유: 조사한 후보 중 충돌 위험이 가장 낮음 (동종업계 활성 경쟁자 없음)
+  단, KIPRIS(kipris.or.kr) 공식 상표 직접 검색은 아직 미실시 —
+  정식 출원/최종 확정 전 반드시 확인 필요
+
+  [개명 적용 완료 항목]
+  - app.json: name / slug / bundleIdentifier / package 변경
+  - ProfileScreen.js: 로그인 화면 타이틀 변경
+  - CLAUDE.md 문서들: 앱 이름 표기 변경
+
+  [의도적으로 유지한 항목]
+  - Firebase projectId (travelshare-b6659): 생성 후 변경 불가능한 내부
+    식별자일 뿐 사용자에게 노출되지 않아 그대로 유지
+  - App.js 푸시알림 projectId, app.json extra.eas.projectId: EAS 정식 등록
+    (eas init / eas build) 시점에 함께 정리 예정 — 아직 미실행
+
+
+===================================================
+  앱 컨셉 변경 예정 (2026-06-25) — ※ 아래 07-15 섹션에서 완료됨
+===================================================
+
+  변경 내용: 탭 구성 및 카테고리 구성 재설계
+  사유: 서비스 방향 재검토
+  상태: 기획 중 → 커뮤니티 카테고리 개편으로 실현 (2026-07-15, 아래 참고)
+
+
+===================================================
+  커뮤니티 카테고리 개편 (2026-07-15)
+===================================================
+
+  변경 내용: posts.destination 카테고리 기준을 국가/지역(일본/태국/유럽/
+             동남아/미주/기타)에서 콘텐츠 유형 기준으로 전면 교체
+
+  [최종 카테고리]
+  전체(필터전용) / 환전정보 / 여행팁 / 여행스토리
+  → CommunityScreen.js의 destinations, writeDestinations 배열
+
+  [마이그레이션]
+  - 기존 게시글(구 국가 카테고리)은 전부 '여행팁'으로 일괄 변경
+  - Node 스크립트로 Firestore 문서 직접 update (1회성 스크립트, 실행 후 삭제)
+
+  [연쇄 변경 — HomeScreen.js]
+  - '인기 여행지'(국가별 집계) 섹션 제거
+  - '인기 여행글'로 대체: 여행팁/여행스토리 게시글을 좋아요순 정렬해
+    상위 3개 카드로 표시
+  - DEST_IMAGES / FALLBACK_DESTINATIONS 상수 제거
+
+  사유: 커뮤니티를 지역별이 아니라 콘텐츠 유형(팁/스토리) 중심으로 재편
+  참고: PackageScreen의 destination 필드(여행지 국가명)는 이 변경과 무관,
+        그대로 유지됨
+
+
+===================================================
+  Firestore 보안 규칙 실제 배포 + 버그 2건 해결 (2026-07-27)
+===================================================
+
+  배경: 트래블시커 개발기 블로그 시리즈(아래 섹션) 스크린샷 촬영 중
+        발견/해결
+
+  1) Firestore 규칙 만료 → 앱 전체 먹통
+  ----------------------------------------
+  - 증상: 앱 전체가 "Missing or insufficient permissions" 에러로 동작 불가
+  - 원인: Firestore가 2026-06-21 테스트 모드로 생성되어 30일 후(~07-21)
+    자동 만료. 로컬에 작성만 해두고 실제 배포는 안 했던 firestore.rules가
+    이 시점까지 한 번도 반영된 적 없었음
+  - 해결: firebase login(사용자 직접 실행) →
+    `firebase deploy --only firestore:rules` 로 배포 ✅
+  - 남은 것: storage.rules는 아직 미배포 (아래 참고)
+
+  2) 채팅 메시지 전송 후 화면에 안 뜨는 버그
+  ----------------------------------------
+  - 증상: 메시지 전송 시 입력창은 비워지는데 대화창에 전혀 표시 안 됨
+  - 원인: firestore.rules의 chats/{chatId}/messages 읽기 규칙이
+    get(.../chats/$(chatId)).data.participants를 무조건 호출하는데,
+    채팅방 문서가 아직 없는 상태(첫 메시지 전송 전)에서 ChatScreen.js가
+    미리 붙여두는 onSnapshot 리스너가 이 get() 실패로 즉시
+    permission-denied를 받아 죽어버림 → 이후 sendMessage()가
+    실제로는 채팅방 문서+메시지를 잘 저장해도, 이미 죽은 리스너는
+    다시 살아나지 않아 화면엔 영원히 안 뜸
+  - 해결: 규칙을 `!exists(부모문서) || 기존조건` 형태로 수정 →
+    부모 문서가 없을 때는 빈 목록으로 허용(리스너 생존) → 나중에
+    문서가 생기면 같은 리스너가 자동으로 새 메시지를 받아옴
+  - 덤 수정: ChatScreen.js의 onSnapshot 에러 핸들러가 console.error를
+    남기도록 고쳐서 앞으로 이런 종류의 버그가 조용히 묻히지 않게 함
+  - `firebase deploy --only firestore:rules`로 배포, 에뮬레이터에서
+    테스트 계정 2개로 재현 후 실시간 전송까지 확인 ✅
+
+  3) 미해결 — Firebase Storage 콘솔 설정
+  ----------------------------------------
+  - storage.rules 배포 시도 시 "Firebase Storage has not been set up" 에러
+  - Firebase 콘솔(https://console.firebase.google.com/project/
+    travelshare-b6659/storage)에서 최초 1회 "시작하기" 클릭 + 위치 선택
+    (서울/asia-northeast3 권장) 필요 — 콘솔에서 사람이 직접 눌러야 하는
+    단계라 아직 미완료
+  - 이게 끝나야 storage.rules 배포 가능
+
+
+===================================================
+  트래블시커 개발기 블로그 시리즈 작성 (2026-07-27)
+===================================================
+
+  컨셉: "코딩 문외한이 클로드로 앱을 만드는 이야기"
+  (제로예산 마케팅 계획의 "2주차: 코딩 몰랐던 내가 여행 앱 만든 이야기" 실행)
+
+  [결과물]
+  TravelApp/docs/blog/ 에 원고(.md) 6편 + shots/ 에 실제 앱 스크린샷 저장
+
+  1화 프롤로그
+  2화 첫 삽 뜨기 (탭 뼈대)
+  3화 회원가입 이야기 (Firebase 연동)
+  4화 진짜 앱처럼 (좋아요·댓글·채팅)
+  5화 개명 이야기 (트래블쉐어 → 트래블시커)
+  6화 우리 앱의 무기 (방향전환·차별점 — 외화 직거래)
+
+  상태: 초안 — 발행 전 사용자 직접 검토·수정 예정, 최종본 아님
+  다음 후보: 7화(외화 직거래 구현기)는 해당 기능 구현 후 작성 예정
+
+  [부수 작업 — 스크린샷용 테스트 데이터]
+  - 에뮬레이터(Pixel_8)에 테스트 계정 2개 생성:
+    blogtest2026@example.com (닉네임 blogtest),
+    buyer2026test@example.com (닉네임 buyertest), 둘 다 비밀번호 test1234
+    → 실제 Firebase(travelshare-b6659)에 남아있는 더미 계정
+  - products 컬렉션에 테스트 상품 "TravelCarrier"(₩80,000, Seoul,
+    blogtest 소유)도 남아있음
+  - 나중에 정리 필요: Firebase 콘솔에서 Authentication 계정 2개 +
+    Firestore products 문서 1개 삭제
+
+
+===================================================
+  배포 플랜 (2026-06-25 수립, 2026-07-28 현재 상황 반영)
+===================================================
+
+  순서:
+  1. ✅ 앱 컨셉 변경 (탭/카테고리 재설계) — 2026-07-15 완료
+  2. Firebase 보안 규칙 배포
+       firestore:rules → ✅ 2026-07-27 배포 완료
+       storage           → ⏳ 미완료 (콘솔에서 Storage "시작하기" 클릭 필요)
+  3. 외화 직거래 매칭 기능 구현 ← 다음 최우선 과제 (컨셉상 배포 전 구현하기로 결정, 2026-07-03)
+  4. EAS build preview (APK) → 실기기 최종 테스트
+       eas build --platform android --profile preview
+  5. Google Play 개발자 계정 개설 ($25)
+       https://play.google.com/console
+  6. 스토어 등록 자료 준비
+       - 앱 아이콘 512×512px PNG
+       - 스크린샷 최소 2장
+       - 앱 설명 (짧은 80자 / 긴 4000자)
+       - 개인정보처리방침 URL (필수)
+  7. EAS build production (AAB)
+       eas build --platform android --profile production
+  8. Play Console 제출 → 심사 3~7일 → 출시
+
+
+===================================================
+  전체 개발 완료 현황
+===================================================
+
+  ✅ 초기 1~6단계: 기본 구조 + Firebase 전체 연동
+  ✅ 개선 1단계: 좋아요 중복방지 / 삭제 / 판매완료 / postCount
+  ✅ 개선 2단계: 마이 > 판매내역 / 구매내역 / 찜한팁 / 프로필수정
+  ✅ 개선 3단계: 댓글 / 패키지 리뷰+별점 / 예약하기
+  ✅ 개선 4단계: 검색 / 푸시알림 / 신고기능 / EAS Build
+  ✅ 앱 이름 최종 확정 및 개명 적용: 트래블쉐어 → 트래블시커(TravelSeeker) (2026-07-13)
+  ✅ 컨셉 방향 확정 + 제로예산 마케팅 계획 수립 (2026-07-03)
+  ✅ 커뮤니티 카테고리 개편: 국가별 → 콘텐츠 유형(환전정보/여행팁/여행스토리) (2026-07-15)
+  ✅ Firestore 보안 규칙 실제 배포 완료 (2026-07-27) — Storage 규칙은 아직 미배포
+  ✅ 채팅 미표시 버그 수정 + 블로그 시리즈 6편 원고·스크린샷 완료 (2026-07-27)
+  ⏳ 다음 단계 (우선순위 순):
+     1. Firebase Storage 콘솔 최초 설정 ("시작하기" 클릭, 사람이 직접) → storage.rules 배포
+     2. 외화 직거래 매칭 기능 설계·구현 — 핵심 차별점, 최우선 과제
+     3. 컨셉 재정비에 따른 탭/UI 조정
+     4. EAS build preview(APK) → 실기기 최종 테스트
+     5. Google Play 개발자 계정 개설($25) → 스토어 등록 자료 준비
+     6. EAS build production(AAB) → Play Console 제출
+     7. 블로그 시리즈 발행 여부 결정 / 7화(외화 직거래 구현기) 추가
+     8. 테스트 계정 2개 + 테스트 상품 1개 정리 (급하지 않음)
+
+
+===================================================
+  Firestore 스키마 (전체)
+===================================================
+
+  users/{uid}
+    uid, email, nickname, createdAt,
+    postCount, likeCount, followCount
+
+  posts/{id}
+    uid, author, avatar, destination, title, content,
+    image, likes, likedBy[], comments, createdAt
+    └ comments/{id}: uid, author, avatar, text, createdAt
+
+  products/{id}
+    uid, author, title, price, category, condition,
+    location, description, image,
+    status('판매중'|'판매완료'), createdAt
+
+  packages/{id}
+    uid, author, title, destination, duration, price,
+    originalPrice, discount, tags[], includes[],
+    schedule[], image, rating, reviews, createdAt
+    └ reviews/{id}: uid, author, rating(1-5), text, createdAt
+
+  chats/{chatId}
+    participants[], productId, productTitle,
+    lastMessage, lastMessageAt
+    └ messages/{id}: uid, text, createdAt
+
+  reservations/{id}
+    uid, userNickname, packageId, packageTitle,
+    packageImage, price, destination, duration,
+    status('예약중'), createdAt
+
+  reports/{id}
+    uid, targetId, targetType('post'|'product'|'package'),
+    reason, createdAt
+
+  chatId 생성 규칙:
+    [buyerUid, sellerUid].sort().join('_') + '_' + productId
+    participants[0] = buyer, participants[1] = seller
+
+
+===================================================
+  현재 앱 파일 구조
+===================================================
+
+  TravelApp/
+  ├── App.js                      ← 탭 네비게이터 + AuthProvider + 푸시알림
+  ├── app.json                    ← 앱 이름, 번들ID, EAS projectId
+  ├── eas.json                    ← EAS 빌드 프로파일 (dev/preview/production)
+  ├── firebase.json               ← Firebase CLI 배포 설정
+  ├── firestore.rules             ← Firestore 보안 규칙 (프로덕션)
+  ├── storage.rules               ← Storage 보안 규칙 (프로덕션)
+  ├── index.js                    ← Expo 진입점
+  ├── package.json                ← 패키지 목록
+  ├── CLAUDE.md                   ← Claude Code 작업 지침
+  ├── AGENTS.md                   ← Expo 버전 주의 메모
+  ├── services/
+  │   ├── firebase.js             ← Firebase 초기화 (auth, db, storage)
+  │   └── uploadImage.js          ← 갤러리 선택 + Storage 업로드
+  ├── context/
+  │   └── AuthContext.js          ← 전역 인증 상태 + setUserProfile 노출
+  ├── screens/
+  │   ├── HomeScreen.js           ← 홈 (환율 배너, 인기 여행글, 최신 팁, 검색)
+  │   ├── CommunityScreen.js      ← 커뮤니티 (글쓰기·좋아요중복방지·삭제·댓글·신고, 카테고리: 환전정보/여행팁/여행스토리)
+  │   ├── MarketScreen.js         ← 중고거래 (판매완료·삭제·채팅·신고)
+  │   ├── PackageScreen.js        ← 패키지 (등록·삭제·리뷰·예약·신고)
+  │   ├── ProfileScreen.js        ← 로그인/회원가입 + 마이 (판매내역·구매내역·찜한팁·프로필수정·예약내역)
+  │   └── ChatScreen.js           ← 실시간 채팅 (Firestore onSnapshot)
+  ├── docs/
+  │   ├── 트래블시커_개발과정_정리.txt  ← 이 파일
+  │   └── blog/                   ← 개발기 블로그 원고 6편 + shots/ 스크린샷 (2026-07-27, 초안)
+  └── assets/                     ← 아이콘, 스플래시, 파비콘
+
+===================================================
